@@ -1,0 +1,8 @@
+{
+  "java.checkstyle.configuration": "/google_checks.xml",
+  "java.project.sourcePaths": [
+    "src",
+    ""
+  ],
+  "java.checkstyle.version": "9.2"
+}
