@@ -1,4 +1,6 @@
+import java.awt.image.BufferedImage;
 import java.io.BufferedReader;
+import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -8,10 +10,7 @@ import java.net.Socket;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-
 import javax.imageio.ImageIO;
-
-import java.awt.image.BufferedImage;
 
 /**
  * .
@@ -34,25 +33,38 @@ public class WebServer {
 
   private static void clientHandler(Socket client) {
     try {
-      BufferedReader input = new BufferedReader(new InputStreamReader(client.getInputStream()));
+      BufferedReader input = new BufferedReader(
+          new InputStreamReader(client.getInputStream(), "Cp852"));
       
       // Parse for and handle the different requests.
+      StringBuilder requestBuilder = new StringBuilder();
       String line;
       while (!(line = input.readLine()).isEmpty()) {
-        String[] a = line.split("\r\n")[0].split(" ");
-        if (a[0].equals("GET")) {
-          Path path = checkForDirectory(Paths.get("./public", a[1]));
-          handleGet(path, client);    
-
-        } else if (a[0].equals("POST")) {
-          handlePost(input);
-          System.out.println("POST request!");
-        } else {
-          status500(client);
-        }
+        requestBuilder.append(line + "\r\n");
         System.out.println(line);
+      }
+      String topDirectory = "./public";
+      String request = requestBuilder.toString();
+
+      String[] a = request.split("\r\n")[0].split(" ");
+
+      if (a[0].equals("GET")) {
+        Path path = checkForDirectory(Paths.get(topDirectory, a[1]));
+        handleGet(path, client);    
+
+      } else if (a[0].equals("POST")) {
+        StringBuilder bodyBuilder = new StringBuilder();
+        while (input.ready()) {
+          bodyBuilder.append((char) input.read());
+        }
+        String body = bodyBuilder.toString();
+        String[] b = body.split("\r\n\r\n");
+        String c = b[0].split(";")[2].split("\"")[1];
+        handlePost(b[1], topDirectory, c);
+        System.out.println("POST request!");
+      } else {
+        status500(client);
       }      
-      
     } catch (IOException e) {
       e.printStackTrace();
     }
@@ -61,8 +73,21 @@ public class WebServer {
   /**
    * .
    */
-  public static void handlePost(BufferedReader input) {
-    // BufferedImage img = ImageIO.read(input);
+  public static void handlePost(String body, String topDirectory, String fileName) {
+    try {
+
+      File targetFile = new File(topDirectory + "/img/" + fileName);
+      String type = fileName.split("\\.")[1];
+
+      byte[] bytes = body.getBytes("Cp852");
+      ByteArrayInputStream botty = new ByteArrayInputStream(bytes);
+    
+      BufferedImage img = ImageIO.read(botty);
+      ImageIO.write(img, type, targetFile);
+
+    } catch (IOException e) {
+      e.printStackTrace();
+    }
   }
 
   /**
