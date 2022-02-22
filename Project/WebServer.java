@@ -1,4 +1,5 @@
 import java.io.BufferedReader;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
@@ -7,6 +8,10 @@ import java.net.Socket;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+
+import javax.imageio.ImageIO;
+
+import java.awt.image.BufferedImage;
 
 /**
  * .
@@ -31,44 +36,61 @@ public class WebServer {
     try {
       BufferedReader input = new BufferedReader(new InputStreamReader(client.getInputStream()));
       
+      // Parse for and handle the different requests.
       String line;
       while (!(line = input.readLine()).isEmpty()) {
         String[] a = line.split("\r\n")[0].split(" ");
-        if (a[0].equals("GET") || a[0].equals("POST")) {
-        
-          String topDirectory = "./public";
+        if (a[0].equals("GET")) {
+          Path path = checkForDirectory(Paths.get("./public", a[1]));
+          handleGet(path, client);    
 
-          Path path = Paths.get(topDirectory, a[1]);
-
-          if (path.startsWith(topDirectory)) {
-            if (Files.exists(path)) {
-              String status = "200 OK";
-              if (path.toString().equals("./public/a/b/b.html")) {
-                path = Paths.get("./public/a/b/c.html");
-                status = "302 Found";
-              }
-              String fileType = Files.probeContentType(path);
-              responseHandler(Files.readAllBytes(path), client, fileType, status);
-            } else {
-              byte[] notFound = "<h1><b>Page not found, idiot!</b></h1>".getBytes();
-              responseHandler(notFound, client, "text/html", "404 Not Found");
-            }               
-          }
-                 
+        } else if (a[0].equals("POST")) {
+          handlePost(input);
+          System.out.println("POST request!");
+        } else {
+          status500(client);
         }
         System.out.println(line);
       }      
       
     } catch (IOException e) {
       e.printStackTrace();
-      status500(client);
     }
   }
 
   /**
    * .
    */
-  public static Path checkPath(Path path) {
+  public static void handlePost(BufferedReader input) {
+    // BufferedImage img = ImageIO.read(input);
+  }
+
+  /**
+   * .
+   */
+  private static void handleGet(Path path, Socket client) {
+    if (Files.exists(path)) {
+      String status = "200 OK";
+      if (path.toString().equals("./public/a/b/b.html")) {
+        path = Paths.get("./public/a/b/c.html");
+        status = "302 Found";
+      }
+      try {
+        String fileType = Files.probeContentType(path);
+        responseHandler(Files.readAllBytes(path), client, fileType, status);
+      } catch (IOException e) {
+        System.out.println(e);
+      }
+    } else {
+      byte[] notFound = "<h1><b>Page not found, idiot!</b></h1>".getBytes();
+      responseHandler(notFound, client, "text/html", "404 Not Found");
+    }
+  }
+
+  /**
+   * .
+   */
+  public static Path checkForDirectory(Path path) {
     if (Files.isDirectory(path)) {
       path = Paths.get(path.toString(), "/index.html");
     }
@@ -76,7 +98,7 @@ public class WebServer {
   }
 
   /**
-   * .
+   * General response handler with set headers.
    */
   public static void responseHandler(byte[] respone, Socket client, String type, String status) {
     try {
@@ -93,12 +115,11 @@ public class WebServer {
 
     } catch (Exception e) {
       System.out.println("Nonono respone.");
-      status500(client);
     }
   }
   
   /**
-   * .
+   * Status code: 500 response.
    */
   public static void status500(Socket client) {
     String status = "500 Internal Server Error";
