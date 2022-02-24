@@ -5,36 +5,47 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
+import java.io.UnsupportedEncodingException;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import javax.imageio.ImageIO;
 
 /**
- * .
+ * A server that handles POST and GET requests.
  */
 public class WebServer {
   /**
-   * .
+   * The main method that takes port and top directory.
    */
   public static void main(String[] args) {
-    try (ServerSocket serverSocket = new ServerSocket(8888)) {
+    try (ServerSocket serverSocket = new ServerSocket(Integer.parseInt(args[0]))) {
       while (true) {
         try (Socket client = serverSocket.accept()) {
-          clientHandler(client);
+          System.out.println("Connected to client! Port: " + args[0] 
+              + " Top directory: " + args[1]);
+          clientHandler(client, args[1]);
         }
       }
-    } catch (Exception e) {
+    } catch (NumberFormatException e) {
+      System.out.println("The port number needs to consist of only integers..."); 
+    } catch (IOException e) {
       System.out.println("Could not open port 8888!");
+    } catch (IllegalArgumentException e) {
+      System.out.println("The passed arguments need to be strings!");
     }
   }
 
-  private static void clientHandler(Socket client) {
+  /**
+   * Handles the client input.
+   */
+  private static void clientHandler(Socket client, String directory) {
     try {
       BufferedReader input = new BufferedReader(
-          new InputStreamReader(client.getInputStream(), "Cp852"));
+          new InputStreamReader(client.getInputStream(), StandardCharsets.ISO_8859_1));
       
       // Parse for and handle the different requests.
       StringBuilder requestBuilder = new StringBuilder();
@@ -43,75 +54,98 @@ public class WebServer {
         requestBuilder.append(line + "\r\n");
         System.out.println(line);
       }
-      String topDirectory = "./public";
+      String topDirectory = "./" + directory;
       String request = requestBuilder.toString();
 
       String[] a = request.split("\r\n")[0].split(" ");
-
+      
       if (request.startsWith("GET")) {
         Path path = checkForDirectory(Paths.get(topDirectory, a[1]));
-        handleGet(path, client);    
+
+        handleGet(path, client, topDirectory);    
 
       } else if (request.startsWith("POST")) {
-        StringBuilder bodyBuilder = new StringBuilder();
-        while (input.ready()) {
-          bodyBuilder.append((char) input.read());
-        }
-        String body = bodyBuilder.toString();
-        String[] b = body.split("\r\n\r\n");
-        String c = b[0].split(";")[2].split("\"")[1];
-        if (c.isEmpty()) {
-          status500(client);
-        }
-        handlePost(b[1], topDirectory, c, client);
-        System.out.println("POST request!");
+        handlePost(topDirectory, client, input);
+        
       } else {
         status500(client);
       }      
     } catch (IOException e) {
-      e.printStackTrace();
+      System.out.println("Something went wrong when reading request.");
     }
   }
 
   /**
-   * .
+   * Handles post requests.
    */
-  public static void handlePost(String body, String topDirectory, String fileName, Socket client) {
+  public static void handlePost(String topDirectory, Socket client, BufferedReader input) {
     try {
-      // adasdas
-      String type = fileName.split("\\.")[1];
 
-      byte[] bytes = body.getBytes("Cp852");
-      ByteArrayInputStream botty = new ByteArrayInputStream(bytes);
-    
-      BufferedImage img = ImageIO.read(botty);
+      StringBuilder bodyBuilder = new StringBuilder();
+      while (input.ready()) {
+        bodyBuilder.append((char) input.read());
+      }
+      String body = bodyBuilder.toString();
+
+      String[] b = body.split("\r\n\r\n");
+      String fileName = b[0].split(";")[2].split("\"")[1];
+      String type = fileName.split("\\.")[1];
+      if (!b[1].isEmpty()) {
+        imageHandler(b[1], fileName, topDirectory, type, client);
+      } else {
+        status500(client);
+      }
+
+      
+    } catch (IOException e) {
+      System.out.println("Something went wrong with the POST request.");
+    } catch (IndexOutOfBoundsException e) {
+      System.out.println("Can't read the request content.");
+    }
+  }
+
+  /**
+   * Handles the formating and storing of an image locally.
+   */
+  private static void imageHandler(String body, String fileName,
+      String topDirectory, String type, Socket client) {
+    byte[] bytes;
+    try {
+      bytes = body.getBytes(StandardCharsets.ISO_8859_1);
+      ByteArrayInputStream bodyBytes = new ByteArrayInputStream(bytes);
+  
+      BufferedImage img = ImageIO.read(bodyBytes);
       if (img != null) {
         ImageIO.write(img, type, new File(topDirectory + "/img/" + fileName));
       } else {
         status500(client);
       }
-      
-
+      System.out.println("Image saved locally!");
+    } catch (UnsupportedEncodingException e) {
+      System.out.println("Something went wrong with the encoding.");
     } catch (IOException e) {
-      e.printStackTrace();
+      System.out.println("Something went wrong when converting to an image.");
     }
+    
   }
 
   /**
-   * .
+   * Handles the GET request from a client.
    */
-  private static void handleGet(Path path, Socket client) {
+  private static void handleGet(Path path, Socket client, String topDirectory) {
     if (Files.exists(path)) {
       String status = "200 OK";
-      if (path.toString().equals("./public/a/b/b.html")) {
-        path = Paths.get("./public/a/b/c.html");
+      System.out.println("Requested file found!");
+      if (path.equals(Path.of(topDirectory + "/a/b/b.html"))) {
+        path = Paths.get(topDirectory + "/a/b/c.html");
         status = "302 Found";
+        System.out.println("Requested file not found.");
       }
       try {
         String fileType = Files.probeContentType(path);
         responseHandler(Files.readAllBytes(path), client, fileType, status);
       } catch (IOException e) {
-        System.out.println(e);
+        System.out.println("Something went wrong with the path.");
       }
     } else {
       byte[] notFound = "<h1><b>Page not found, idiot!</b></h1>".getBytes();
@@ -120,7 +154,8 @@ public class WebServer {
   }
 
   /**
-   * .
+   * Check if a given path points to a directory. If true,
+   * then redirect to the index file.
    */
   public static Path checkForDirectory(Path path) {
     if (Files.isDirectory(path)) {
@@ -145,8 +180,10 @@ public class WebServer {
       output.flush();
       client.close();
 
+      System.out.println("Response succesfully sent!");
+
     } catch (Exception e) {
-      System.out.println("Nonono respone.");
+      System.out.println("Response failed.");
     }
   }
   
@@ -157,5 +194,6 @@ public class WebServer {
     String status = "500 Internal Server Error";
     byte[] respone = "<h1><b>Ohh nooo, you suck!</b></h1>".getBytes();
     responseHandler(respone, client, "text/html", status);
+    System.out.println("500 error triggerd.");
   }
 }

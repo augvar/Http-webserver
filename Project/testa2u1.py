@@ -5,7 +5,7 @@ from pathlib import Path
 import re
 import hashlib
 
-# Assumes the server runs on localhost, port 80. 
+# Assumes the server runs on localhost, port 8888. 
 server = '127.0.0.1'
 port = 8888
 
