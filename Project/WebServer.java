@@ -78,7 +78,7 @@ public class WebServer {
    */
   public static void handlePost(String body, String topDirectory, String fileName, Socket client) {
     try {
-
+      // adasdas
       String type = fileName.split("\\.")[1];
 
       byte[] bytes = body.getBytes("Cp852");
