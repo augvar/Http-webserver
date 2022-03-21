@@ -23,12 +23,22 @@ public class WebServer {
    */
   public static void main(String[] args) {
     try (ServerSocket serverSocket = new ServerSocket(Integer.parseInt(args[0]))) {
-      while (true) {
-        try (Socket client = serverSocket.accept()) {
-          System.out.println("Connected to client! Port: " + args[0] 
-              + " Top directory: " + args[1]);
-          clientHandler(client, args[1]);
-        }
+      while (true) {  
+        Socket client = serverSocket.accept();
+        new Thread() {
+            public void run() {
+              try {
+                
+                System.out.println("Connected to client! Port: " + args[0] 
+                    + " Top directory: " + args[1]);
+                clientHandler(client, args[1]);
+                client.close();
+              } catch (Exception e) {
+                e.printStackTrace();
+              }
+              
+            }
+          }.start();
       }
     } catch (NumberFormatException e) {
       System.out.println("The port number needs to consist of only integers..."); 
@@ -37,7 +47,8 @@ public class WebServer {
     } catch (IllegalArgumentException e) {
       System.out.println("The passed arguments need to be strings!");
     }
-  }
+  } 
+  
 
   /**
    * Handles the client input.
@@ -70,7 +81,10 @@ public class WebServer {
       } else {
         status500(client);
       }      
+    } catch (NullPointerException e) {
+      System.out.println("Faulty connection");
     } catch (IOException e) {
+      System.out.println(e.getMessage());
       System.out.println("Something went wrong when reading request.");
     }
   }
